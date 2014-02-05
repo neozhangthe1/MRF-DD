@@ -1,10 +1,19 @@
-#include <iostream>
+//
+//  File.cpp
+//  
+//
+//  Created by Yutao Zhang on 14-2-5.
+//
+//
 
-namespace MRF_DD {
+#include "Parser.h"
+
+using namespace MRF_DD;
+
+int main(int argc, char* argv[]) {
+    DataSet* ds;
     
-    int main(int argc, char* argv[]) {
-        
-    }
+    ds = new DataSet();
+    FactorGraph* graph = new FactorGraph;
+    ds->LoadData("example.txt", graph);
 }
-
-
