@@ -1,9 +1,9 @@
 #include "Parser.h"
 #include "FactorGraph.h"
+#include "Factor.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
-#include "Parser.h"
 #include "Util.h"
 
 #define MAX_BUF_SIZE 65536
@@ -11,20 +11,24 @@
 using namespace std;
 
 namespace MRF_DD {
-    vector<string> DataSet::GetLabels(const char* data_file) {
+    vector<string> Parser::GetLabels(const char* data_file) {
         char buf[MAX_BUF_SIZE];
         char *eof;
         set<string> set_labels;
         vector<string> tokens;
         
         FILE* fin = fopen(data_file, "r");
-        for (;;) {
+        while (true) {
             eof = fgets(buf, MAX_BUF_SIZE, fin);
+            if (eof == NULL) {
+                break;
+            }
             
             tokens = CommonUtil::StringTokenize(buf);
             
-            if (tokens[0] == "#")
+            if (tokens[0] == "#") {
                 continue;
+            }
             set_labels.insert(tokens[0].substr(1));
         }
         fclose(fin);
@@ -32,174 +36,117 @@ namespace MRF_DD {
         return labels;
     }
     
-//    int DataSet::LoadGraph(ifstream &file, FactorGraph *graph) {
-//        string line;
-//        
-//        // Read number of variables.
-//        getline(file, line);
-//        if (file.eof()) {
-//            return -1;
-//        }
-//        TrimComments("#", &line);
-//        int num_vars = atoi(line.c_str());
-//        
-//        // Read number of factors.
-//        getline(file, line);
-//        TrimComments("#", &line);
-//        int num_factors = atoi(line.c_str());
-//        
-//        // Read variables
-//        vector<BinaryVariable*> variables(num_vars);
-//        for (int i = 0; i < num_vars; i++) {
-//            getline(file, line);
-//            TrimComments("#", &line);
-//            BinaryVariable* var = graph->CreateBinaryVariable();
-//            
-//            char label_type = tokens[0][0];
-//            string label_name = tokens[0].substr(1);
-//            
-//            // Positive
-//            if (label_type == "+") {
-//                BinaryVariable* var = graph->CreateBinaryVariable();
-//                var->SetLabel(1);
-//            }
-//            // Negative
-//            else if (label_type == "-") {
-//                var->SetLabel(0);
-//            }
-//            // Unlabeled
-//            else if (label_type == "?") {
-//                var->SetLabel(-1);
-//            }
-//            else {
-//                fprintf(stderr, "Data format wrong! Label must start with +/?\n");
-//                exit(0);
-//            }
-//            
-//            for (int i = 0; i < tokens.size(); i++) {
-//                
-//            }
-//            
-//            variables[i] = var;
-//        }
+    bool Parser::UpdateFactor(const string& key, int& index)
+    {
+        auto it = factor_index.find(key);
+        if(it != factor_index.end()) {
+            index = it->second;
+            return false;
+        } else {
+            factor_index[key] = factor_index.size();
+            return true;
+        }
+    }
     
-        // Read factors.
-        
-//        for (int i = 0; i < num_factors; i++) {
-//            getline(file, line);
-//            TrimComments("#", &line);
-//            vector<string> fields;
-//            StringSplit(line, "\t ", &fields);
-//            
-//            // Read linked variables.
-//            int offset = 1;
-//            int num_links = atoi(fields[1].c_str());
-//            vector<BinaryVariable*> binary_vars(num_links);
-//            vector<bool> labels(num_links, false);
-//            offset++;
-//            
-//            for (int j = 0; j < num_links; j++) {
-//                int k = atoi(fields[offset+j].c_str());
-//                binary_vars[j] = variables[k];
-//            }
-//            
-//            // Read factor type.
-//            Factor *factor;
-//            if (fields[0] == "XOR") {
-//                factor = graph->CreateFactorXOR(binary_vars);
-//            } else if (fields[0] == "ATMOSTONE") {
-//                factor = graph->CreateFactorAtMostOne(binary_vars);
-//            } else if (fields[0] == "PAIR") {
-//                factor = graph->CreateFactorPAIR(binary_vars);
-//            }
-//        }
-//        
-//        cout << "Read " << num_vars << " variables and " << num_factors << " factors." << endl;
-//        
-//        return 0;
-//    }
     
-    void DataSet::LoadData(const char* data_file, FactorGraph *graph) {
+    void Parser::LoadData(const char* data_file, FactorGraph *graph) {
+        cout << "Loading file" << endl;
         char buf[MAX_BUF_SIZE];
         char* eof;
-        
         vector<string> tokens;
+
+        vector<BinaryVariable*> variables;
+        vector<BinaryVariable*> vars;
         
-        vector<string> labels = GetLabels(data_file);
-        for (int i = 0; i < labels.size(); i++) {
-            label_dict.GetId(labels[i]);
+        vector<string> feature_keys = GetLabels(data_file);
+        cout << feature_keys.size() << " features " << endl;
+        
+        for (int i = 0; i < feature_keys.size(); i++) {
+            graph->feature_keys.push_back(feature_keys[i]);
+            feature_index.insert(make_pair(feature_keys[i], i));
         }
         FILE* fin = fopen(data_file, "r");
         
-        for (;;) {
+        while (true) {
             eof = fgets(buf, MAX_BUF_SIZE, fin);
-            
-            // # Factor Type NUM_VAR Variables
-            if (tokens[0] == "#PAIR") {
-                int a = atoi(tokens[3].c_str());
-                int b = atoi(tokens[4].c_str());
-                vector<BinaryVariable*> binary_vars;
-                vector<bool> negated;
-                //binary_vars.push_back(a);
-                //binary_vars.push_back(b);
-                Factor* factor = graph->CreateFactorXOR(binary_vars, negated);
-                factor->name = factor_type_dict.GetId(tokens[1]);
+            if (eof == NULL) {
+                cout << "Loading file finished" << endl;
+                break;
             }
-            else if (tokens[0] == "#ATMOST1") {
-                vector<int> vars;
-                vector<BinaryVariable*> binary_vars;
-                vector<bool> negated;
+            vars.clear();
+            // # Factor Type NUM_VAR Variables
+            if (tokens[0] == "#edge") {
+
+                int a = atoi(tokens[1].c_str());
+                int b = atoi(tokens[2].c_str());
+
+                vars.push_back(variables[a]);
+                vars.push_back(variables[b]);
+                
+                int index = 0;
+                bool created = UpdateFactor(tokens[3], index);
+                if (created) {
+                    graph->factor_keys.push_back(tokens[3]);
+                    graph->factor_type.push_back(FactorTypes::FACTOR_DENSE);
+                    graph->factor_type.push_back(2);
+                }
+
+                graph->CreateFactorDense(vars, index);
+            } else if (tokens[0] == "#atmost1") {
                 int num_vars = atoi(tokens[1].c_str());
                 vars.resize(num_vars, 0);
                 for(int i = 0; i < num_vars; i++) {
-                    vars[i] = atoi(tokens[3+i].c_str());
+                    vars.push_back(variables[atoi(tokens[2+i].c_str())]);
                 }
-                Factor* factor = graph->CreateFactorAtMostOne(binary_vars, negated);
-                factor->name = factor_type_dict.GetId(tokens[1]);
                 
-            }
-            else if (tokens[0] == "#TRAN") {
-                int a = atoi(tokens[1].c_str());
-                int b = atoi(tokens[2].c_str());
-                int c = atoi(tokens[3].c_str());
-                //Factor* factor = graph->CreateFactorDense();
-                //factor->type = factor_type_dict.GetId(tokens[1]);
+                int index = 0;
+                bool created = UpdateFactor(tokens[3], index);
+                if (created) {
+                    graph->factor_keys.push_back(tokens[3]);
+                    graph->factor_type.push_back(FactorTypes::FACTOR_DENSE);
+                    graph->factor_type.push_back(2);
+                }
                 
+                graph->CreateFactorAtMostOne(vars, index);
             }
             // Read Variables
             // LABEL_TYPE LABEL NUM_FEATURE FEATURES
             else {
                 char label_type = tokens[0][0];
-                string label_name = tokens[0].substr(1);
-                BinaryVariable *var = graph->CreateBinaryVariable();
+                char label_value = tokens[0][1];
+                
+                auto var = graph->CreateBinaryVariable();
+                var->SetId(variables.size());
                 // Labeled
                 if (label_type == '+') {
-                    var->IsLabeled(true);
+                    var->SetType(VariableTypes::VAR_TRAINING);
                 }
                 // Unlabeled
                 else if (label_type == '?') {
-                    var->IsLabeled(false);
+                    var->SetType(VariableTypes::VAR_TEST);
                 }
                 else {
                     fprintf(stderr, "Data format wrong! Label must start with +/?\n");
                     exit(0);
                 }
                 
-                for (int i = 0; i < tokens.size(); i++) {
-                    vector<string> key_val = CommonUtil::StringSplit(tokens[i], ':');
-                    var->features.push_back( feature_type_dict.GetId(key_val[0]) );
-                    var->values.push_back( atof(key_val[1].c_str()) );
+                if (label_value == '0') {
+                    var->SetValue(-1);
+                } else {
+                    var->SetValue(1);
                 }
+                
+                for (int i = 1; i < tokens.size(); i++) {
+                    vector<string> key_val = CommonUtil::StringSplit(tokens[i], ':');
+                    var->features.push_back(feature_index[key_val[0]]);
+                    int val = atof(key_val[1].c_str());
+                    var->feature_values[i-1] = val;
+                }
+                variables.push_back(var);
             }
         }
         
-        num_label = label_dict.GetSize();
-        num_feature_type = feature_type_dict.GetSize();
-        num_factor_type = factor_type_dict.GetSize();
-        if (num_factor_type == 0) {
-            num_factor_type = 1;
-        }
-        
+
         fclose(fin);
     }
 }

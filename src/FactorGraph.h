@@ -12,8 +12,8 @@ namespace MRF_DD {
     class FactorGraph {
     public:
         FactorGraph() {
-            num_links = 0;
-            num_features = 0;
+            num_link = 0;
+            num_feature = 0;
         }
         
         ~FactorGraph() {
@@ -53,73 +53,88 @@ namespace MRF_DD {
             return multi;
         }
 
-        void DeclareFactor(Factor* factor, const vector<BinaryVariable*> &variables, const vector<bool> &negated) {
+        void DeclareFactor(Factor* factor, const vector<BinaryVariable*> &variables, const int factor_key) {
             factor->SetId(factors.size());
-            factor->Initialize(variables, negated, &num_links);
+            factor->Initialize(variables, &num_link, factor_key);
             factors.push_back(factor);
         }
+        
+        Factor* CreateFactorDense(const vector<BinaryVariable*> &variables, const int factor_key) {
+            Factor* factor = new FactorDense;
+            DeclareFactor(factor, variables, factor_key);
+            return factor;
+        }
 
-        Factor* CreateFactorXOR(const vector<BinaryVariable*> &variables, const vector<bool> &negated) {
+        Factor* CreateFactorXOR(const vector<BinaryVariable*> &variables, const int factor_key) {
             Factor* factor = new FactorXOR;
-            DeclareFactor(factor, variables, negated);
+            DeclareFactor(factor, variables, factor_key);
             return factor;
         }
         
-        Factor* CreateFactorAtMostOne(const vector<BinaryVariable*> &variables,
-                                      const vector<bool> &negated) {
+        Factor* CreateFactorAtMostOne(const vector<BinaryVariable*> &variables, const int factor_key) {
             Factor *factor = new FactorAtMostOne;
-            DeclareFactor(factor, variables, negated);
+            DeclareFactor(factor, variables, factor_key);
             assert(variables.size() > 1);
             return factor;
-        }                         
-        
-        Factor* CreateFactorPAIR(const vector<BinaryVariable*> &variables,
-                                 double edge_log_potential) {
-            Factor *factor = new FactorPAIR;
-            vector<bool> negated;
-            DeclareFactor(factor, variables, negated);
-           // vector<double> additional_log_potentials(1, edge_log_potential);
-           // factor->SetAdditionalLogPotentials(additional_log_potentials);
-            return factor;
         }
         
-        void ConvertToBinaryFactorGraph(FactorGraph *binary_graph);
-
-        void GetBestConfiguration(int num_variable, int num_states);
-        
-        void GenFeature();
+        void Initialize();
         
         int Train();
         
-        int Inference(double lower_bound,
-                      vector<double> *posteriors,
-                      vector<double> *additional_posteriors,
-                      double *value,
-                      double *upper_bound);
+        int Inference();
+        
+        void ConvertToBinaryFactorGraph(FactorGraph *binary_graph);
+        
+        void GenFeature();
+        
+        void Evaluate();
 
-        int num_links;
-        int num_features;
-        int num_local_param;
-        int num_label;
+        // num of links between variables and factors
+        int num_link;
+        // num of training instances
+        int num_training_instance;
+        // num of local feature types
         int num_feature_type;
+        // num factor types
         int num_factor_type;
     
-
+        // variable set
         vector<BinaryVariable*> variables;
+        // muli variable set
         vector<MultiVariable*> multi_variables;
+        // factor set
         vector<Factor*> factors;
+        
+        // Local potential of the variables.
+        vector<double> variable_potentials;
 
-        int psdd_max_iteration;
-        double psdd_eta;
+        // max iteration
+        int max_iteration;
+        // step size
+        double init_eta = 2.0;
 
+        // weight parameters
         vector<double> w;
-        vector<double> lambdas;
-        vector<double> maps;
-        vector<double> maps_av;
+        // dual variables
+        vector<double> lambda;
         
-
+        // MAP assignment.
+        vector<int> map_x;
+        vector<int> average_x;
+        vector<int> sum_x;
+        vector<int> best_x;
         
-        map<string, int> feature_type;
+        int num_feature;
+        
+        // Local feature name to id
+        vector<string> feature_keys;
+        vector<int> feature_to_fid;
+        // Factor name to id
+        vector<string> factor_keys; // size = num of factor keys
+        vector<int> factor_type; // size = num of factor keys
+        vector<int> factor_degree; // size = num of factor keys
+        vector<int> factor_to_fid; 
         
         
     };

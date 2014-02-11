@@ -3,376 +3,380 @@
 
 namespace MRF_DD {
 
-    void FactorGraph::ConvertToBinaryFactorGraph(FactorGraph *binary_graph) {
-        vector<vector<BinaryVariable*>> converted_variables(multi_variables.size());
-        for (int i = 0; i < multi_variables.size(); i++) {
-            MultiVariable *multi_variable = multi_variables[i];
-            converted_variables[i].resize(multi_variable->GetNumStates());
-            for (int j = 0; j < multi_variable->GetNumStates(); j++) {
-                converted_variables[i][j] = binary_graph->CreateBinaryVariable();
-                //converted_variables[i][j] = SetLogPotential(multi_variable->GetLogPotential(j));
-            }
-            //binary_graph->CreateFactorXOR(converted_variables[i]);
-        }
-    }
-
-    void FactorGraph::GetBestConfiguration(int num_variable, int num_states) {
-        int offset = 0;
-        double value = 0.0;
-        int grid_size = 0;
-        vector<vector<int>> best_states(grid_size, vector<int>(grid_size));
-
-        for (int i = 0; i < num_variable; i++) {
-            int best = -1;
-            for (int k = 0; k < num_states; k++) {
-               // if (best < 0 || posteriors[offset + k] > posteriors[offset + best]) {
-                  //  best = k;
-              //  }
-            }
-            offset += num_states;
-            //best_states[i][j] = best;
-        }
-
-    }
-
     void FactorGraph::GenFeature() {
-        num_features = 0;
+        num_feature = 0;
         
-        // local features: g(x; z)
-        num_local_param = num_label * num_feature_type;
-        num_features += num_local_param;
-        
-        // pair feature: g(x1, x2; z)
-        int offset = 0;
-        for (int x1 = 0; x1 < num_label; x1++) {
-            for (int x2 = 0; x2 < num_label; x2++) {
-                offset++;
-            }
+        // Local features.
+        num_feature += (4 * feature_keys.size());
+        for (int i = 0; i < feature_keys.size(); i++) {
+            feature_to_fid[i] = 4 * i;
         }
         
-        // dense feature: g(x1, x2, x3; z)
-        for (int y1 = 0; y1 < num_label; y1++) {
-            for (int y2 = y1; y2 < num_label; y2++) {
-                for (int y3 = y2; y3 < num_label; y3++) {
-                    offset++;
-                }
+        // Factor features.
+        for (int i = 0; i < factor_type.size(); i++) {
+            // Generate features for AtMostOne factor.
+            if (factor_type[i] == FactorTypes::FACTOR_ATMOSTONE) {
+                factor_to_fid[i] = num_feature;
+                num_feature += 1;
             }
-        }
-        
-    }
-    double CalcGradient(double* gradient, int num_features, FactorGraph* graph) {
-        // Objective
-        double f;
-        double *t1;
-        double *t2;
-        
-        f = 0.0;
-        for (int i = 0; i < num_features; i++) {
-            gradient[i] = 0;
-        }
-        
-        for (int i = 0; i < graph->variables.size(); i++) {
-            BinaryVariable *var = graph->variables[i];
-            for (int y = 0; y < num_features; y++) {
-                for (int t = 0; t < num_features; t++) {
-                    //gradient[] += var->value[t] * graph->variable;
-                }
-            }
-        }
-
-        for (int i = 0; i < graph->factors.size(); i++) {
-            Factor *factor = graph->factors[i];
-            for (int y = 0; y < num_features; y++) {
-                //for (int t = 0; t < factor->num_features; t++) {
-                 //   v *= exp()
-                //}
-            }
-        }
-        
-    }
-
-    int FactorGraph::Train() {
-        // Gradient.
-        double* dw;
-        dw = new double[num_features + 1];
-        
-        int max_iter = 1000;
-
-        // Initialization
-        w.clear();
-        w.resize(num_features, 0.0);
-        lambdas.clear();
-        lambdas.resize(num_links, 0.0);
-        maps.clear();
-        maps.resize(num_links, 0.0);
-        maps_av.clear();
-        maps_av.resize(variables.size(), 0.5);
-
-        int num_times_increment = 0;
-        double dual_obj_prev = 1e100;
-        double extra_score = 0;
-        double dual_obj = extra_score;
-
-        vector<double> dual_obj_factors(factors.size(), 0.0);
-
-        for (int t = 0; t < max_iter; t++) {
-            // Set step size
-            double eta = 0.0;
-
-            // Projected gradient method
-
-            // Optimize slave MRFs 
-            for (int i = 0; i < factors.size(); ++i) {
-                Factor* factor = factors[i];
-                int factor_degree = factor->Degree();
-                // Compute the MAP and update the dual objective
-                double val;
-                //factor->SolveMAP(&val);
-                double delta = 0.0;
-                for (int j = 0; j < factor_degree; ++j) {
-                    int m = factor->GetLinkId(i);
-                    delta -= lambdas[m];
-                }
-                dual_obj += val + delta - dual_obj_factors[i];
-                dual_obj_factors[i] = val + delta;
-            }
-
-            // Update w
             
-            
-
-            // Update lambdas
-            for (int i = 0; i < variables.size(); i++) {
-                BinaryVariable *variable = variables[i];
-                int variable_degree = variable->Degree();
-
-                for (int j = 0; j < variable_degree; j++) {
-                    int m = variable->GetLinkId(j);
-                    Factor* factor = variable->GetFactor(j);
-                    int k = factor->GetId();
-                    double diff_penalty = maps_av[m];
-
-
-                }
+            // Generate features for Dense factor.
+            if (factor_type[i] == FactorTypes::FACTOR_DENSE) {
+                factor_to_fid[i] = num_feature;
+                num_feature += pow(2, factor_degree[i]);
             }
-
         }
-
     }
     
-    int FactorGraph::Inference(double lower_bound,
-                             vector<double> *posteriors,
-                             vector<double> *additional_posteriors,
-                             double *value,
-                             double *upper_bound) {
+    void FactorGraph::Evaluate() {
+        int tp = 0, fp = 0, tn = 0, fn = 0;
+        int tp_best = 0, fp_best = 0, tn_best = 0, fn_best = 0;
+        for (int i = 0; i < variables.size(); i++) {
+            auto var = variables[i];
+
+            if (var->GetType() == VariableTypes::VAR_TEST) {
+                int label = var->GetLabel();
+                int curt_vote[2];
+                int best_vote[2];
+                
+                for (int j = 0; j < var->Degree(); j++) {
+                    int lid = var->GetLinkId(j);
+                    if (map_x[lid] > 0) {
+                        curt_vote[1] += 1;
+                    } else {
+                        curt_vote[0] += 1;
+                    }
+                    if (best_x[lid]) {
+                        best_vote[1] += 1;
+                    } else {
+                        best_vote[0] += 1;
+                    }
+                }
+                int best_result, curt_result = -1;
+                if (curt_vote[1] > curt_vote[0]) {
+                    curt_result = 1;
+                }
+                if (best_vote[1] > best_vote[0]) {
+                    best_result = 1;
+                }
+                
+                if (label > 0) { // Positive instance.
+                    if (curt_result > 0) {
+                        tp += 1;
+                    } else {
+                        fn += 1;
+                    }
+                    if (best_result > 0) {
+                        tp_best += 1;
+                    } else {
+                        fn_best += 1;
+                    }
+                } else { // Negative instance.
+                    if (curt_result > 0) {
+                        fp += 1;
+                    } else {
+                        tn += 1;
+                    }
+                    if (best_result > 0) {
+                        fp_best += 1;
+                    } else {
+                        tn_best += 1;
+                    }
+                }
+            }
+        }
+        
+        // Calculate evaluation measures.
+        double precision = double(tp) / (tp + fp);
+        double recall = double(tp) / (tp + fn);
+        double f1 = 2 * precision * recall / (precision + recall);
+        
+        cout << "Performance:" << endl;
+        cout << "Prec: " << precision << endl;
+        cout << "Recall " << recall << endl;
+        cout << "F1 " << f1 << endl;
+        
+        cout << "" << endl;
+        
+        precision = double(tp_best) / (tp_best + fp_best);
+        recall = double(tp_best) / (tp_best + fn_best);
+        f1 = 2 * precision * recall / (precision + recall);
+        
+        cout << "Best performance:" << endl;
+        cout << "Prec: " << precision << endl;
+        cout << "Recall " << recall << endl;
+        cout << "F1 " << f1 << endl;
+        
+        cout << "------------------------" << endl;
+        
+        
+    }
+    
+
+    int FactorGraph::Train() {
+        cout << "Start training" << endl;
+        // Gradient.
+        vector<double> dw;
+        dw.resize(num_feature, 0.0);
+        
+        // Current Iteration.
+        int t;
+        
+        // Dual objective function, max L(\lambda)
+        double dual_obj = 0.0;
+        double dual_obj_prev = 1e100;
+        double dual_obj_best = 1e100;
+        // Stores each factor contribution to the dual objective
+        vector<double> dual_obj_factors(factors.size(), 0.0);
+        
+        // Primal objective function, min E(x)
+        double primal_obj = 0.0;
+        double primal_obj_best = -1e100;
+        
+        int num_interations_compute_dual = 50;
+        
+        // Compute extra score for variables that not connected to any factor
+        double extra_score = 0.0;
+        for (int i = 0; i < variables.size(); i++) {
+            auto var = variables[i];
+            int var_degree = var->Degree();
+            double potential = var->GetPotential();
+            if (var_degree == 0 && potential > 0) {
+                extra_score += potential;
+            }
+        }
+        dual_obj = extra_score;
+        
+        // Lagrangian multipliers.
+        lambda.clear();
+        lambda.resize(num_link, 0.0);
+        
+        // MAP assignment
+        map_x.clear();
+        map_x.resize(num_link, 0.0);
+        average_x.clear();
+        average_x.resize(variables.size(), 0.5);
+        
+
+        // Main loop.
+        for (t = 0; t < max_iteration; ++t) {
+            cout << "Iteration" << endl;
+            // Set stepsize.
+            double eta = init_eta / sqrt(static_cast<double>(t+1));
+            
+            // Compute dual value.
+            for (int j = 0; j < factors.size(); ++j) {
+                Factor *factor = factors[j];
+                int factor_degree = factor->Degree();
+                
+                // Calculate addition potential.
+                vector<double> additional_potential(factor_degree, 0.0);
+                for (int i = 0; i < factor_degree; i++) {
+                    auto var = factor->GetVariable(i);
+                    int lid = factor->GetLinkId(i);
+                    double dis_sim = 0.0;
+                    if (var->GetLabel() != map_x[lid]) {
+                        dis_sim += 1;
+                    }
+                    additional_potential[i] = (lambda[lid] - dis_sim);
+                }
+                
+                // Solve the slave problem.
+                double objective = factor->SolveMAP(additional_potential);
+                
+                // Calculate dw.
+                for (int i = 0; i < factor_degree; i++) {
+                    auto var = factor->variables[i];
+                    for (int k = 0; k < feature_keys.size(); k++) {
+                        int offset = 0;
+                        if (var->GetLabel() > 0) {
+                            offset = 1;
+                        } else {
+                            offset = 0;
+                        }
+                        dw[k + offset] += 1;
+                        
+                        if (var->GetValue() > 0) {
+                            offset = 1;
+                        } else {
+                            offset = 0;
+                        }
+                        dw[k + offset] -= 1;
+                    }
+                }
+                int feature_offset_labeled = factor->GetFeatureOffset(factor->values);
+                int feature_offset_map = factor->GetFeatureOffset(factor->labels);
+                dw[feature_offset_labeled] += 1;
+                dw[feature_offset_map] -= 1;
+                
+                // Update dual objective.
+                double delta = 0.0;
+                for (int i = 0; i < factor_degree; i++) {
+                    auto var = factor->variables[i];
+                    
+                    int lid = factor->GetLinkId(i);
+                    int vid = var->GetId();
+                    delta -= lambda[lid];
+                    
+                    // Update x and \sum x
+                    sum_x[vid] += factor->values[i] - map_x[lid];
+                    map_x[lid] = factor->values[i];
+                }
+                dual_obj += (objective + delta - dual_obj_factors[j]);
+                dual_obj_factors[j] = objective + delta;
+            }
+            
+            // Update w.
+            for (int i = 0; i < feature_keys.size(); i++) {
+                dw[i] /= (double)variables.size();
+            }
+            for (int i = 0; i < num_feature; i++) {
+                w[i] += eta * (w[i] + dw[i]);
+            }
+            
+            // Optimize and update Lagrange multipliers.
+            for (int i = 0; i < variables.size(); i++) {
+                auto var = variables[i];
+                int var_degree = var->Degree();
+                
+                // Compute \sum \frac{1}{|F_v|} x_v
+                if (var_degree == 0) {
+                    average_x[i] = (var->GetPotential() > 0) ? 1.0 : 0.0;
+                } else {
+                    average_x[i] = sum_x[i] / static_cast<double>(var_degree);
+                }
+                
+                // Calculate difference penalty.
+                for (int j = 0; j < var_degree; j++) {
+                    int lid = var->GetLinkId(j);
+                    auto factor = var->GetFactor(j);
+                    int fid = factor->GetId();
+                    double diff_penalty = map_x[lid] - average_x[i];
+                    
+                    // Update lambda.
+                    lambda[lid] += eta * diff_penalty;
+                }
+            }
+            
+            // Update dual objective and MAP assignment
+            if (dual_obj_best < dual_obj) {
+                dual_obj_best = dual_obj;
+                best_x = map_x;
+            }
+            
+            Evaluate();
+            
+        }
+    }
+    
+    int FactorGraph::Inference() {
+        cout << "Start inference" << endl;
         timeval start, end;
         gettimeofday(&start, NULL);
-        
-        // Stopping criterion parameters.
-        double residual_threshold_final = 1e-12;
-        double residual_threshold = 1e-6;
-        
-        // Optimization status.
-        bool optimal = false;
-        bool reached_lower_bound = false;
-        
-        // Miscellaneous
-        vector<double> log_potentials;
-        vector<double> x0;
-        vector<double> x;
-        bool recompute_everything = true;
-        
+
+        // Current Iteration.
         int t;
+        // Dual objective function, max L(\lambda)
+        double dual_obj = 0.0;
         double dual_obj_best = 1e100;
+        // Stores each factor contribution to the dual objective
+        vector<double> dual_obj_factors(factors.size(), 0.0);
+        // Primal objective function, min E(x)
+        double primal_obj = 0.0;
         double primal_obj_best = -1e100;
         
         int num_interations_compute_dual = 50;
 
-        // Compute extra score to account for variables that are not connected to any factor.
-        double extra_score = 0.0;// ????
-        for (int i = 0; i < variables.size(); ++i) {
-            BinaryVariable* variable = variables[i];
-            int degree = variable->Degree();
-            double log_potential = variable->GetLogPotential();
-            if (degree == 0 && log_potential > 0) {
-                extra_score += log_potential;
+        // Compute extra score for variables that not connected to any factor
+        double extra_score = 0.0;
+        for (int i = 0; i < variables.size(); i++) {
+            auto var = variables[i];
+            int var_degree = var->Degree();
+            double potential = var->GetPotential();
+            if (var_degree == 0 && potential > 0) {
+                extra_score += potential;
             }
         }
+        dual_obj = extra_score;
+        
+        // Dual variables.
+        lambda.clear();
+        lambda.resize(num_link, 0.0);
+        
+        // MAP assignment
+        map_x.clear();
+        map_x.resize(num_link, 0.0);
+        average_x.clear();
+        average_x.resize(variables.size(), 0.5);
 
-        lambdas.clear();
-        lambdas.resize(num_links, 0.0);
-        // don't know?
-        maps.clear();
-        maps.resize(num_links, 0.0);
-        maps_av.clear();
-        maps_av.resize(variables.size(), 0.5);
-
-        double dual_obj_prev = 1e100;
-        double dual_obj = extra_score;
-        // Stores each factor contribution to the dual objective
-        vector<double> dual_obj_factors(factors.size(), 0.0);
-        int psdd_max_iterations = 100;
         // Main loop.
-        for (t = 0; t < psdd_max_iterations; ++t) {
+        for (t = 0; t < max_iteration; ++t) {
+            cout << "Iteration" << t;
             // Set stepsize.
-            double eta = psdd_eta / sqrt(static_cast<double>(t+1));
+            double eta = init_eta / sqrt(static_cast<double>(t+1));
             
-            // Initialize all variables as inactive.
-            for (int i = 0; i < variables.size(); ++i) {
-                //variables_is_active[i] = false;
-            }
-            
-            // Optimize over maps (Compute dual value)
-            int num_inactive_factors = 0;
+            // Compute dual value.
             for (int j = 0; j < factors.size(); ++j) {
-                // if ((0 != (t % num_iterations_reset)) &&
-                //     !recompute_everything && !factor_is_active[j]) {
-                //     ++num_inactive_factors;
-                //     continue;
-                // }
-                
                 Factor *factor = factors[j];
                 int factor_degree = factor->Degree();
                 
-                //vector<double> *cached_log_potentials = factor->GetMutableCachedVariableLogPotentials();
-                //cached_log_potentials->resize(factor_degree);
-                for (int i = 0; i < factor_degree; ++i) {
-                    int m = factor->GetLinkId(i);
-                    BinaryVariable* variable = factor->GetVariable(i);
-                    int variable_degree = variable->Degree();
-                    double val = variable->GetLogPotential() / static_cast<double>(variable->Degree()) + 2.0 * lambdas[m];
-                    //(*cached_log_potentials)[i] = val;
+                // Calculate addition potential.
+                vector<double> additional_potential(factor_degree, 0.0);
+                for (int i = 0; i < factor_degree; i++) {
+                    int lid = factor->GetLinkId(i);
+                    additional_potential[i] = lambda[lid];
                 }
-                //factor->ComputeCachedAdditionalLogPotentials(1.0);
+                // Solve the slave problem and update dual objective
+                double objective = factor->SolveMAP(additional_potential);
 
-                // Compute the MAP and update the dual objective.
-                // Sub-problem 
-                double val;
-                //factor->SolveMAP(&val);
-                double delta = 0.0; //- \sum lambdas
-                for (int i = 0; i < factor_degree; ++i) {
-                    int m = factor->GetLinkId(i);
-                    delta -= lambdas[m];
+                double delta = 0.0;
+                for (int i = 0; i < factor_degree; i++) {
+                    auto var = factor->variables[i];
+                    
+                    int lid = factor->GetLinkId(i);
+                    int vid = var->GetId();
+                    delta -= lambda[lid];
+                    
+                    // Update x and \sum x
+                    sum_x[vid] += factor->values[i] - map_x[lid];
+                    map_x[lid] = factor->values[i];
                 }
-                //
-                // Update global dual objective
-                dual_obj += val + delta - dual_obj_factors[j];
-                // Update local dual objective
-                dual_obj_factors[j] = val + delta;
-
-                //const vector<double> &variable_posteriors = factor->GetCachedVariablePosteriors();
-                for (int i = 0; i < factor_degree; ++i) {
-                    int m = factor->GetLinkId(i);
-                    BinaryVariable* variable = factor->GetVariable(i);
-                    int k = variable->GetId();
-                    //maps_sum[k] += variable_posteriors[i] - maps[m];
-                   // maps[m] = variable_posteriors[i];
-                }
-
-                //const vector<double> &factor_additional_posteriors = factor->GetCachedAdditionalPosteriors();
-                //int offset = additional_factor_offsets[j];
-                //for (int i = 0; i < factor_additional_posteriors.size(); ++i) {
-                    //(*additional_posteriors)[offset] = factor_additional_posteriors[i];
-                    //++offset;
-                //}
-
+                dual_obj += (objective + delta - dual_obj_factors[j]);
+                dual_obj_factors[j] = objective + delta;
             }
 
-            // Optimize over maps_av and update Lagrange multipliers.
-            double primal_residual = 0.0;
-            for (int i = 0; i < variables.size(); ++i) {
-                BinaryVariable *variable = variables[i];
-                int variable_degree = variable->Degree();
-                // maps_av: average MAP 你 
-                //if (!variable_is_active[i]) {
-                    if (variable_degree == 0) {
-                        maps_av[i] = (variable->GetLogPotential() > 0)? 1.0 : 0.0;
-                    }
-                    // Make sure dual_residual = 0 and maps_av_[i] does not change.
-                 //   continue;
-               // }
+            // Optimize and update Lagrange multipliers.
+            for (int i = 0; i < variables.size(); i++) {
+                auto var = variables[i];
+                int var_degree = var->Degree();
                 
-                if (variable_degree == 0) {
-                    maps_av[i] = (variable->GetLogPotential() > 0)? 1.0 : 0.0;
+                // Compute \sum \frac{1}{|F_v|} x_v
+                if (var_degree == 0) {
+                    average_x[i] = (var->GetPotential() > 0) ? 1.0 : 0.0;
                 } else {
-                  //  maps_av[i] = maps_sum[i] / static_cast<double>(variable_degree);
+                    average_x[i] = sum_x[i] / static_cast<double>(var_degree);
                 }
-                for (int j = 0; j < variable_degree; ++j) {
-                    int m = variable->GetLinkId(j);
-                    Factor* factor = variable->GetFactor(j);
-                    int k = factor->GetId();
-                    // \nu_i^a - \nu_i
-                    double diff_penalty = maps[m] - maps_av[i];
-                  //  int l = indVinF[m];
-                  //  vector<double> *cached_log_potentials = factor->GetMutableCachedVariableLogPotentials();
-                 //   (*cached_log_potentials)[l] -= 2.0 * eta * diff_penalty;
-
-                    // Update lambdas
-                    lambdas[m] -= eta * diff_penalty;
-           //         factor_is_active[k] = true;
-                    primal_residual += diff_penalty * diff_penalty;
+                
+                // Calculate difference penalty.
+                for (int j = 0; j < var_degree; j++) {
+                    int lid = var->GetLinkId(j);
+                    auto factor = var->GetFactor(j);
+                    int fid = factor->GetId();
+                    double diff_penalty = map_x[lid] - average_x[i];
+                    
+                    // Update lambda.
+                    lambda[lid] += eta * diff_penalty;
                 }
             }
-
-            primal_residual = sqrt(primal_residual / lambdas.size());
-
-
-            // Compute relaxed primal objective.
-            double primal_rel_obj = -1e100;
-            //if (compute_primal_rel) {
-                primal_rel_obj = 0.0;
-                for (int i = 0; i < variables.size(); ++i) {
-                    primal_rel_obj += maps_av[i] * variables[i]->GetLogPotential();
-                }
-                //for (int i = 0; i < additional_log_potentials.size(); ++i) {
-                 //   primal_rel_obj += (*additional_posteriors)[i] * additional_log_potentials[i];
-                //}
-            //}
-
-            if (dual_obj_best > dual_obj) {
+            
+            // Update dual objective and MAP assignment
+            if (dual_obj_best < dual_obj) {
                 dual_obj_best = dual_obj;
-                for (int i = 0; i < variables.size(); ++i) {
-                    (*posteriors)[i] = maps_av[i];
-                }
-                if (dual_obj_best < lower_bound) {
-                    reached_lower_bound = true;
-                    break;
-                }
+                best_x = map_x;
             }
+            
+            Evaluate();
 
-           // if (primal_rel_obj_best < primal_rel_obj) {
-           //     primal_rel_obj_best = primal_rel_obj;
-            //}
-
-            if (primal_residual < residual_threshold) {
-                for (int i = 0; i < variables.size(); ++i) {
-                    (*posteriors)[i] = maps_av[i];
-                }
-                if (primal_residual < residual_threshold_final) {
-                    optimal = true;
-                    break;
-                }
-            }
-
-            recompute_everything = false;
-        }
-        bool fractional = false;
-        *value = 0.0;
-        for (int i = 0; i < variables.size(); ++i) {
-            //if (!NEARLY_BINARY((*posteriors)[i]. 1e-12)) fractional = true;
-            *value += (*posteriors)[i] * variables[i]->GetLogPotential();
-        }
-        //for (int i = 0; i < additional_log_potentials.size(); ++i) {
-          //  *value += (*additional_posteriors)[i] * additional_log_potentials[i];
-      //  }
-        
-        *upper_bound = dual_obj_best;
-
-        if (optimal) {
-            if (!fractional)
-            {
-                /* code */
-            }
         }       
     }
 }

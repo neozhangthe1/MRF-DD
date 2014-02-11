@@ -20,7 +20,8 @@ namespace MRF_DD {
             FACTOR_ATMOSTONE,
             FACTOR_BUDGET,
             FACTOR_KNAPSACK,
-            FACTOR_MULTI_DENSE
+            FACTOR_DENSE,
+            FACTOR_COUNT
         };
     };
     
@@ -34,25 +35,26 @@ namespace MRF_DD {
         virtual int type() = 0;
     
         
-        // Return the number of binary variables linked to the factor
+        // Return the number of binary variables linked to the factor.
         int Degree() { return variables.size(); }
         
         // Return a binary variable.
         BinaryVariable *GetVariable(int i) { return variables[i]; }
         
-        bool IsVariableNegated(int i) { return negated[i]; }
+        bool GetValue(int i) { return values[i]; }
         
-        virtual void Initialize(const vector<BinaryVariable*> &variables, const vector<bool> &negated, int *link_id) {
+        virtual void Initialize(const vector<BinaryVariable*> &variables, int *link_id, int factor_key) {
             this->variables = variables;
-            if (negated.size() == 0) {
-                this->negated.assign(variables.size(), false);
-            } else {
-                this->negated = negated;
-            }
+            this->factor_key = factor_key;
             links.resize(variables.size());
+            values.resize(variables.size());
+            labels.resize(variables.size());
             for (int i = 0; i < variables.size(); i++) {
+                auto var = variables[i];
                 this->links[i] = *link_id;
                 this->variables[i]->LinkToFactor(this, links[i]);
+                values[i] = var->GetValue();
+                labels[i] = var->GetLabel();
                 ++(*link_id);
             }
         }
@@ -62,22 +64,41 @@ namespace MRF_DD {
         
         int GetLinkId(int i) { return links[i]; }
         
-        // Compute the MAP (local subproblem in the projected subgradient algorithm).
-        virtual void SolveMAP(const vector<double> &variable_log_potentials,
-                              const vector<double> &additional_log_potentials,
-                              vector<double> *variable_posteriors,
-                              vector<double> *additional_posteriors,
-                              double *value) = 0;
+        // Calculate objective of the factor.
+        double CalcObjective(vector<double> additional_potential, bool labeled = false) {
+            double objective = 0.0;
+            if (labeled) {
+                for (int i = 0; i < variables.size(); i++) {
+                    auto var = variables[i];
+                    objective += var->GetLabel() * (var->GetPotential() + additional_potential[i]);
+                }
+            } else {
+                for (int i = 0; i < variables.size(); i++) {
+                    auto var = variables[i];
+                    objective += values[i] * (var->GetPotential() + additional_potential[i]);
+                }
+            }
+        }
         
-
+        // Get feature id for factor.
+        virtual int GetFeatureOffset(vector<int> assignment) = 0;
+        
+        // Compute the MAP (local subproblem in the projected subgradient algorithm).
+        virtual double SolveMAP(vector<double> additional_potential) = 0;
+        
+        // Miscellaneous.
         int id;
-        int name;
+        int factor_key;
         
         vector<BinaryVariable*> variables;
         vector<MultiVariable*> multi_variables;
-        vector<bool> negated;
+        
+        // Store values of the variables.
+        vector<int> values;
+        vector<int> labels;
         vector<int> links;
-        vector<double> additional_log_potentials;
+        vector<double> potentials;
+
     };
     
     // AtMostOne factor. Only configurations with at most one 1 are legal
@@ -85,39 +106,29 @@ namespace MRF_DD {
     public:
         FactorAtMostOne() {};
         int type() { return FactorTypes::FACTOR_ATMOSTONE; }
-        
-        // Compute the MAP (local subproblem in the projected subgradient algorithm
-        void SolveMAP(const vector<double> &variable_log_potentials,
-                      const vector<double> &additional_log_potentials,
-                      vector<double> *variable_posteriors,
-                      vector<double> *additional_posteriors,
-                      double *value);
-        
+        double SolveMAP(vector<double> additional_potential);
+        int GetFeatureOffset(vector<int> assignment);
+    };
+    
+    class FactorDense: public Factor {
+    public:
+        FactorDense() {};
+        int type() { return FactorTypes::FACTOR_DENSE; }
+        double SolveMAP(vector<double> additional_potential);
+        int GetFeatureOffset(vector<int> assignment);
     };
     
     class FactorXOR: public Factor {
     public:
         FactorXOR() {};
         int type() { return FactorTypes::FACTOR_XOR; }
-        
-        void SolveMAP(const vector<double> &variable_log_potentials,
-                      const vector<double> &additional_log_potentials,
-                      vector<double> *variable_posteriors,
-                      vector<double> *additional_posteriors,
-                      double *value);
+        double SolveMAP(vector<double> additional_potential);
+        int GetFeatureOffset(vector<int> assignment);
     };
 
-    class FactorPAIR: public Factor {
-    public:
-        FactorPAIR() {};
-        int type() { return FactorTypes::FACTOR_PAIR; }
-        
-        void SolveMAP(const vector<double> &variable_log_potentials,
-                      const vector<double> &additional_log_potentials,
-                      vector<double> *variable_posteriors,
-                      vector<double> *additional_posteriors,
-                      double *value);
-    };
+
+
+
 }
 
 

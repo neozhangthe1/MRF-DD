@@ -11,9 +11,9 @@
 using namespace MRF_DD;
 
 int main(int argc, char* argv[]) {
-    DataSet* ds;
-    
-    ds = new DataSet();
+    Parser* parser = new Parser;
     FactorGraph* graph = new FactorGraph;
-    ds->LoadData("example.txt", graph);
+    parser->LoadData("example.txt", graph);
+    graph->Train();
+    graph->Inference();
 }

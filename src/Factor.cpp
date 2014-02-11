@@ -1,161 +1,89 @@
 #include "Factor.h"
 
+#include <cmath>
+
 using namespace std;
 
 namespace MRF_DD {
-    
-    void FactorAtMostOne::SolveMAP(const vector<double> &variable_log_potentials,
-                                  const vector<double> &additional_log_potentials,
-                                  vector<double> *variable_posteriors,
-                                  vector<double> *additional_posteriors,
-                                  double *value) {
-        
-        // Create a local copy of the log potentials.
-        vector<double> log_potentials(variable_log_potentials);
-
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                log_potentials[f] = -log_potentials[f];
-            }
-        }
-        
-        *value = 0.0;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                *value -= log_potentials[f];
-            }
-        }
-        
-        // find the variable with the largest potential.
-        int first = -1;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (first < 0 || log_potentials[f] > log_potentials[first]) {
-                first = f;
-            }
-        }
-        
-        bool all_zeros = true; 
-        // if all the potential are negtive, then all zero.
-        if (log_potentials[first] > 0.0) {
-            *value += log_potentials[first];
-            all_zeros = false;
-        }
-        
-        for (int f = 0; f < variables.size(); f++) {
-            if (negated[f]) {
-                (*variable_posteriors)[f] = 1.0;
-            } else {
-                (*variable_posteriors)[f] = 0.0;
-            }
-        }
-        
-        if (!all_zeros) {
-            (*variable_posteriors)[first] = negated[first]? 0.0 : 1.0;
-        }
-    }
-    
-    void FactorPAIR::SolveMAP(const vector<double> &variable_log_potentials,
-                                   const vector<double> &additional_log_potentials,
-                                   vector<double> *variable_posteriors,
-                                   vector<double> *additional_posteriors,
-                                   double *value) {
-        
-        // Create a local copy of the log potentials.
-        vector<double> log_potentials(variable_log_potentials);
-        
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                log_potentials[f] = -log_potentials[f];
-            }
-        }
-        
-        *value = 0.0;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                *value -= log_potentials[f];
-            }
-        }
-        
-        // find the variable with the largest potential.
-        int first = -1;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (first < 0 || log_potentials[f] > log_potentials[first]) {
-                first = f;
-            }
-        }
-        
-        bool all_zeros = true;
-        // if all the potential are negtive, then all zero.
-        if (log_potentials[first] > 0.0) {
-            *value += log_potentials[first];
-            all_zeros = false;
-        }
-        
-        for (int f = 0; f < variables.size(); f++) {
-            if (negated[f]) {
-                (*variable_posteriors)[f] = 1.0;
-            } else {
-                (*variable_posteriors)[f] = 0.0;
-            }
-        }
-        
-        if (!all_zeros) {
-            (*variable_posteriors)[first] = negated[first]? 0.0 : 1.0;
-        }
-    }
 
     
-    void FactorXOR::SolveMAP(const vector<double> &variable_log_potentials,
-                                   const vector<double> &additional_log_potentials,
-                                   vector<double> *variable_posteriors,
-                                   vector<double> *additional_posteriors,
-                                   double *value) {
+    double FactorAtMostOne::SolveMAP(vector<double> additional_potential) {
+        double objective = 0.0;
+        double max_potential = 0.0;
+        double max_var = -1;
         
-        // Create a local copy of the log potentials.
-        vector<double> log_potentials(variable_log_potentials);
-        
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                log_potentials[f] = -log_potentials[f];
+        for (int i = 0; i < variables.size(); i++) {
+            values[i] = -1;
+            double potential = (variables[i]->GetPotential() + additional_potential[i]);
+            objective += (-potential);
+            if (potential > max_potential) {
+                max_var = i;
             }
         }
         
-        *value = 0.0;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (negated[f]) {
-                *value -= log_potentials[f];
+        if (max_var > 0) {
+            values[max_var] = 1;
+            objective += max_potential;
+            objective += max_potential;
+        }
+        
+        return objective;
+    }
+    
+    int FactorAtMostOne::GetFeatureOffset(vector<int> assignment) {
+        return 0;
+    }
+    
+    double FactorDense::SolveMAP(vector<double> additional_potential) {
+        double objective = -100000000;
+        vector<int> curt_assignment;
+        curt_assignment.resize(variables.size(), -1);
+        
+        // Generate permutation of variable assignment.
+        int num_permutation = pow(2, variables.size());
+        for (int i = 0; i < num_permutation; i++) {
+            int j = 0;
+            while (1) {
+                if (curt_assignment[j] == -1) {
+                    break;
+                } else {
+                    curt_assignment[j] = -1;
+                }
+            }
+            curt_assignment[j] = 1;
+            
+            // Calculate objective.
+            double curt_objective = 0.0;
+            for (int k = 0; k < variables.size(); k++) {
+                curt_objective += curt_assignment[k] * (variables[k]->GetPotential() + additional_potential[k]);
+            }
+            if (curt_objective > objective) {
+                objective = curt_objective;
+                this->values = curt_assignment;
             }
         }
         
-        // find the variable with the largest potential.
-        int first = -1;
-        for (int f = 0; f < variables.size(); ++f) {
-            if (first < 0 || log_potentials[f] > log_potentials[first]) {
-                first = f;
+        return objective;
+    }
+    
+    int FactorDense::GetFeatureOffset(vector<int> assignment) {
+        int count = 0;
+        for (int i = 0; i < assignment.size(); i++) {
+            if (assignment[i] == 1) {
+                count += 1;
             }
         }
-        
-        bool all_zeros = true;
-        // if all the potential are negtive, then all zero.
-        if (log_potentials[first] > 0.0) {
-            *value += log_potentials[first];
-            all_zeros = false;
-        }
-        
-        for (int f = 0; f < variables.size(); f++) {
-            if (negated[f]) {
-                (*variable_posteriors)[f] = 1.0;
-            } else {
-                (*variable_posteriors)[f] = 0.0;
-            }
-        }
-        
-        if (!all_zeros) {
-            (*variable_posteriors)[first] = negated[first]? 0.0 : 1.0;
-        }
+        return count;
     }
 
+    double FactorXOR::SolveMAP(vector<double> additional_potential) {
+        return 0.0;
+    }
     
+    int FactorXOR::GetFeatureOffset(vector<int> assignment) {
+        return 0;
+    }
+
 	
 }
 
